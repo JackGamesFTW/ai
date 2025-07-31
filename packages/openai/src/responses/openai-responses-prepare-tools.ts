@@ -5,6 +5,7 @@ import {
 } from '@ai-sdk/provider';
 import { OpenAIResponsesTool } from './openai-responses-api-types';
 import { fileSearchArgsSchema } from '../tool/file-search';
+import { codeInterpreterArgsSchema } from '../tool/code-interpreter';
 
 export function prepareResponsesTools({
   tools,
@@ -22,6 +23,7 @@ export function prepareResponsesTools({
     | 'required'
     | { type: 'file_search' }
     | { type: 'web_search_preview' }
+    | { type: 'code_interpreter' }
     | { type: 'function'; name: string };
   toolWarnings: LanguageModelV2CallWarning[];
 } {
@@ -76,6 +78,16 @@ export function prepareResponsesTools({
               },
             });
             break;
+          case 'openai.code_interpreter': {
+            const args = codeInterpreterArgsSchema.parse(tool.args);
+            openaiTools.push({
+              type: 'code_interpreter',
+              container: typeof args.container === 'string'
+                ? args.container
+                : { type: 'auto', file_ids: args.container.file_ids },
+            });
+            break;
+          }
           default:
             toolWarnings.push({ type: 'unsupported-tool', tool });
             break;
@@ -106,7 +118,9 @@ export function prepareResponsesTools({
             ? { type: 'file_search' }
             : toolChoice.toolName === 'web_search_preview'
               ? { type: 'web_search_preview' }
-              : { type: 'function', name: toolChoice.toolName },
+              : toolChoice.toolName === 'code_interpreter'
+                ? { type: 'code_interpreter' }
+                : { type: 'function', name: toolChoice.toolName },
         toolWarnings,
       };
     default: {

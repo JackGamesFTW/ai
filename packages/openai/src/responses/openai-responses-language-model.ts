@@ -281,13 +281,23 @@ export class OpenAIResponsesLanguageModel implements LanguageModelV2 {
                     type: z.literal('output_text'),
                     text: z.string(),
                     annotations: z.array(
-                      z.object({
-                        type: z.literal('url_citation'),
-                        start_index: z.number(),
-                        end_index: z.number(),
-                        url: z.string(),
-                        title: z.string(),
-                      }),
+                      z.union([
+                        z.object({
+                          type: z.literal('url_citation'),
+                          start_index: z.number(),
+                          end_index: z.number(),
+                          url: z.string(),
+                          title: z.string(),
+                        }),
+                        z.object({
+                          type: z.literal('container_file_citation'),
+                          container_id: z.string(),
+                          start_index: z.number(),
+                          end_index: z.number(),
+                          file_id: z.string(),
+                          filename: z.string(),
+                        }),
+                      ])
                     ),
                   }),
                 ),
@@ -308,6 +318,14 @@ export class OpenAIResponsesLanguageModel implements LanguageModelV2 {
                 type: z.literal('computer_call'),
                 id: z.string(),
                 status: z.string().optional(),
+              }),
+              z.object({
+                type: z.literal('code_interpreter_call'),
+                id: z.string(),
+                status: z.string().optional(),
+                code: z.string(),
+                container_id: z.string(),
+                outputs: z.any(),
               }),
               z.object({
                 type: z.literal('reasoning'),
@@ -381,13 +399,29 @@ export class OpenAIResponsesLanguageModel implements LanguageModelV2 {
             });
 
             for (const annotation of contentPart.annotations) {
-              content.push({
-                type: 'source',
-                sourceType: 'url',
-                id: this.config.generateId?.() ?? generateId(),
-                url: annotation.url,
-                title: annotation.title,
-              });
+              if (annotation.type === 'url_citation') {
+                content.push({
+                  type: 'source',
+                  sourceType: 'url',
+                  id: this.config.generateId?.() ?? generateId(),
+                  url: annotation.url,
+                  title: annotation.title,
+                });
+              } else if (annotation.type === 'container_file_citation') {
+                content.push({
+                  type: 'source',
+                  sourceType: 'document',
+                  id: annotation.file_id,
+                  mediaType: 'image/png',
+                  title: annotation.filename,
+                  filename: annotation.filename,
+                  providerMetadata: {
+                    openai: {
+                      containerId: annotation.container_id,
+                    }
+                  }
+                });
+              }
             }
           }
           break;
@@ -422,6 +456,25 @@ export class OpenAIResponsesLanguageModel implements LanguageModelV2 {
             toolCallId: part.id,
             toolName: 'web_search_preview',
             result: { status: part.status || 'completed' },
+            providerExecuted: true,
+          });
+          break;
+        }
+
+        case 'code_interpreter_call': {
+          content.push({
+            type: 'tool-call',
+            toolCallId: part.id,
+            toolName: 'code_interpreter',
+            input: '',
+            providerExecuted: true,
+          });
+
+          content.push({
+            type: 'tool-result',
+            toolCallId: part.id,
+            toolName: 'code_interpreter',
+            result: { status: part.status || 'completed', code: part.code, containerId: part.container_id },
             providerExecuted: true,
           });
           break;
@@ -576,6 +629,17 @@ export class OpenAIResponsesLanguageModel implements LanguageModelV2 {
                   id: value.item.id,
                   toolName: 'web_search_preview',
                 });
+              } else if (value.item.type === 'code_interpreter_call') {
+                ongoingToolCalls[value.output_index] = {
+                  toolName: 'code_interpreter',
+                  toolCallId: value.item.id,
+                };
+
+                controller.enqueue({
+                  type: 'tool-input-start',
+                  id: value.item.id,
+                  toolName: 'code_interpreter',
+                });
               } else if (value.item.type === 'computer_call') {
                 ongoingToolCalls[value.output_index] = {
                   toolName: 'computer_use',
@@ -659,6 +723,33 @@ export class OpenAIResponsesLanguageModel implements LanguageModelV2 {
                   toolName: 'web_search_preview',
                   result: {
                     type: 'web_search_tool_result',
+                    status: value.item.status || 'completed',
+                  },
+                  providerExecuted: true,
+                });
+              } else if (value.item.type === 'code_interpreter_call') {
+                ongoingToolCalls[value.output_index] = undefined;
+                hasToolCalls = true;
+
+                controller.enqueue({
+                  type: 'tool-input-end',
+                  id: value.item.id,
+                });
+
+                controller.enqueue({
+                  type: 'tool-call',
+                  toolCallId: value.item.id,
+                  toolName: 'code_interpreter',
+                  input: '',
+                  providerExecuted: true,
+                });
+
+                controller.enqueue({
+                  type: 'tool-result',
+                  toolCallId: value.item.id,
+                  toolName: 'code_interpreter',
+                  result: {
+                    type: 'code_interpreter_tool_result',
                     status: value.item.status || 'completed',
                   },
                   providerExecuted: true,
@@ -890,6 +981,11 @@ const responseOutputItemAddedSchema = z.object({
       id: z.string(),
       status: z.string(),
     }),
+    z.object({
+      type: z.literal('code_interpreter_call'),
+      id: z.string(),
+      status: z.string(),
+    }),
   ]),
 });
 
@@ -921,6 +1017,11 @@ const responseOutputItemDoneSchema = z.object({
     }),
     z.object({
       type: z.literal('computer_call'),
+      id: z.string(),
+      status: z.literal('completed'),
+    }),
+    z.object({
+      type: z.literal('code_interpreter_call'),
       id: z.string(),
       status: z.literal('completed'),
     }),

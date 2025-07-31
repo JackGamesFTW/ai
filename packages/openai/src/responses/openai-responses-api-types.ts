@@ -80,6 +80,13 @@ export type OpenAIResponsesTool =
       };
     }
   | {
+      type: 'code_interpreter';
+      container: {
+        type: 'auto';
+        file_ids: string[];
+      } | string;
+    }
+  | {
       type: 'file_search';
       vector_store_ids?: string[];
       max_num_results?: number;
