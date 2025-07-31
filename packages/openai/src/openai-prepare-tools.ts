@@ -6,6 +6,7 @@ import {
 import { OpenAITools, OpenAIToolChoice } from './openai-types';
 import { fileSearchArgsSchema } from './tool/file-search';
 import { webSearchPreviewArgsSchema } from './tool/web-search-preview';
+import { codeInterpreterArgsSchema } from './tool/code-interpreter';
 
 export function prepareTools({
   tools,
@@ -67,6 +68,16 @@ export function prepareTools({
               type: 'web_search_preview',
               search_context_size: args.searchContextSize,
               user_location: args.userLocation,
+            });
+            break;
+          }
+          case 'openai.code_interpreter': {
+            const args = codeInterpreterArgsSchema.parse(tool.args);
+            openaiTools.push({
+              type: 'code_interpreter',
+              container: typeof args.container === 'string'
+                ? args.container
+                : { type: 'auto', file_ids: args.container.file_ids },
             });
             break;
           }
