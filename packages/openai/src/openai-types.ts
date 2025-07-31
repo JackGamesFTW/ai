@@ -56,24 +56,12 @@ export interface OpenAIWebSearchPreviewTool {
 }
 
 /**
- * OpenAI code interpreter tool definition
- */
-export interface OpenAICodeInterpreterTool {
-  type: 'code_interpreter';
-  container: {
-    type: 'auto';
-    file_ids: string[];
-  };
-}
-
-/**
  * Union type for all OpenAI tools
  */
 export type OpenAITool =
   | OpenAIFunctionTool
   | OpenAIFileSearchTool
-  | OpenAIWebSearchPreviewTool
-  | OpenAICodeInterpreterTool;
+  | OpenAIWebSearchPreviewTool;
 
 /**
  * OpenAI tool choice options

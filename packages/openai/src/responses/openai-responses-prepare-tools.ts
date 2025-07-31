@@ -22,7 +22,6 @@ export function prepareResponsesTools({
     | 'required'
     | { type: 'file_search' }
     | { type: 'web_search_preview' }
-    | { type: 'code_interpreter' }
     | { type: 'function'; name: string };
   toolWarnings: LanguageModelV2CallWarning[];
 } {
@@ -77,12 +76,6 @@ export function prepareResponsesTools({
               },
             });
             break;
-          case 'openai.code_interpreter':
-            openaiTools.push({
-              type: 'code_interpreter',
-              container: (tool as any).container ?? { type: 'auto' },
-            });
-            break;
           default:
             toolWarnings.push({ type: 'unsupported-tool', tool });
             break;
@@ -113,9 +106,7 @@ export function prepareResponsesTools({
             ? { type: 'file_search' }
             : toolChoice.toolName === 'web_search_preview'
               ? { type: 'web_search_preview' }
-              : toolChoice.toolName === 'code_interpreter'
-                ? { type: 'code_interpreter' }
-                : { type: 'function', name: toolChoice.toolName },
+              : { type: 'function', name: toolChoice.toolName },
         toolWarnings,
       };
     default: {
